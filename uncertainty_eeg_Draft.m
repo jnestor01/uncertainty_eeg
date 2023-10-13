@@ -14,7 +14,7 @@ p.chan_exp = 5;
 p.nbinsstimval = 100;
 
 %EEG specific (assuming 1000Hz data)
-p.msperbin = 1;
+p.msperbin = 5;
 
 
 
@@ -22,7 +22,6 @@ p.msperbin = 1;
 %input: rows as time points columns as channels planes as trials
 % samples = [];
 % Ntrials = size(samples,3);
-% NtimePoints = floor(size(samples,1)/msperbin)
 % Nelectrodes = size(samples,2);
 
 %Bergen simulation function
@@ -30,16 +29,29 @@ p.msperbin = 1;
 %        'Wstd', 0.3, 'sigma', 0.3, 'randseed', p.randseed, 'shuffle_oris', 1, 'sim_stim_type', sim_stim_type, 'nclasses', nclasses));  
 
 %Dummy data
+samples =[];
 Ntrials = 100;
 Nelectrodes = 20;
 stimval = rand(Ntrials,1) * 2*pi;
-trialLength = 300;
+trialLength = 20;
+ntsfactor = 1;
 for l = 1:Nelectrodes
+    pref = rand(1)*2*pi;
     for k = 1:trialLength
-        samples(:,l) = rem(stimval,rand(1)*2*pi) + randn(Ntrials,1);
+        samples(k,l,:) = abs(stimval-pref)/ntsfactor + randn(Ntrials,1);
     end
 end
 
+%cut off data at end if trial length is not divisible by binsize
+NtimePoints = floor(size(samples,1)/p.msperbin);
+samples = samples(1:NtimePoints*p.msperbin,:,:);
+%time binning
+samples = reshape(mean(reshape(samples,p.msperbin,[])),NtimePoints,Nelectrodes,Ntrials);
+
+%If we treat each time point+electrode pair as a completely separate
+%datapoint, with no assumptions about covariance, it's easiest to make the
+%sample matrix 2d: rows are NtimePoints consecutive sets of Nelectrodes
+samples = reshape(samples, (Nelectrodes*NtimePoints),Ntrials);
 
 %Must index trials with vectors containing info about: true stimulus
 %values, assignment to training or testing set, and run numbers (runs are
@@ -56,8 +68,8 @@ shuff = randperm(Ntrials);
 test_trials = shuff(1:Ntesttrials)';
 train_trials = shuff(Ntesttrials+1:end)';
 
-train_samples = samples(train_trials,:);
-test_samples = samples(test_trials,:);
+train_samples = samples(:,train_trials);
+test_samples = samples(:,test_trials);
 
 
 binvals = linspace(0, 2*pi, p.nbinsstimval+1)';
@@ -101,8 +113,8 @@ for b=1:p.nboot
     idx = randi(N,N,1);
     
     %calculate matrix and noise
-    W = (train_samples(idx,:)\train_resp(idx,:, set))';
-    noise = train_samples(idx,:) - (train_resp(idx,:,set)*W);
+    W = (train_resp(idx,:, set)\train_samples(:,idx)')';
+    noise = train_samples(idx,:) - (train_resp(idx,:,set)*W');
 
     %calculate sigma
     samplecov = noise'*noise/Ntraintrials;
