@@ -1,5 +1,7 @@
 %ignoring random seeding for now
 
+clear
+
 %portion of data to hold out as testing data
 p.test_part = 0.2;
 %maximum number of bootstrap iterations
@@ -30,10 +32,10 @@ p.msperbin = 5;
 
 %Dummy data
 samples =[];
-Ntrials = 100;
-Nelectrodes = 20;
+Ntrials = 200;
+Nelectrodes = 4;
 stimval = rand(Ntrials,1) * 2*pi;
-trialLength = 20;
+trialLength = 100;
 ntsfactor = 1;
 for l = 1:Nelectrodes
     pref = rand(1)*2*pi;
@@ -46,7 +48,7 @@ end
 NtimePoints = floor(size(samples,1)/p.msperbin);
 samples = samples(1:NtimePoints*p.msperbin,:,:);
 %time binning
-samples = reshape(mean(reshape(samples,p.msperbin,[])),NtimePoints,Nelectrodes,Ntrials);
+samples = reshape(mean(reshape(samples,p.msperbin,[]),1),NtimePoints,Nelectrodes,Ntrials);
 
 %If we treat each time point+electrode pair as a completely separate
 %datapoint, with no assumptions about covariance, it's easiest to make the
@@ -105,6 +107,8 @@ end
 lambda = 0.5;
 lambda_var = 0.5;
 
+liks = zeros(Ntesttrials, p.nbinsstimval);
+
 for b=1:p.nboot
 %find W and Sigma
     set = randi(p.nsets);
@@ -114,10 +118,72 @@ for b=1:p.nboot
     
     %calculate matrix and noise
     W = (train_resp(idx,:, set)\train_samples(:,idx)')';
-    noise = train_samples(idx,:) - (train_resp(idx,:,set)*W');
+    noise = train_samples(:,idx) - (train_resp(idx,:,set)*W')';
 
     %calculate sigma
-    samplecov = noise'*noise/Ntraintrials;
+    samplecov = noise*noise'/Ntraintrials;
+
+    %come back to target covariance
+
+    WWt = W*W';
+    t = tril(ones(size(W,1)),-1)==1;
+
+    sigmasq = mean(noise'.^2);
+
+    % vars = mean
+    %OLS: how well can we predict covariance terms with some constant (coeff(2)) and
+    %some coefficient associated with tuning-correlated noise
+    %(coeff(1))?
+    coeff = [WWt(t), ones(sum(t(:)),1)]\samplecov(t);
+
+    targetcov = coeff(1)*WWt + coeff(2)*ones(size(W,1));
+    targetdiag = lambda_var*median(sigmasq)+(1-lambda_var)*sigmasq;
+    targetcov(eye(size(W,1))==1) = targetdiag;
+    % 
+    % 
+    % cov = (1-lambda)*samplecov+lambda*targetcov;
+    cov = samplecov;
+
+    % [~, flag] = chol(cov);
+    % if flag>0
+    %     [evec, eval] = eig(cov);
+    %     eval = diag(eval);
+    %     min_eval = min(eval);
+    %     eval = max(eval,1e-10);
+    %     C = evec*diag(eval)/evec;
+    %     fprintf('\nWARNING: Non-positive definite covariance matrix detected. Lowest eigenvalue: %3.2g. Finding a nearby PD matrix by thresholding eigenvalues at 1e-10.\n', min_eval);
+    % end
+
+    prec_mat = invChol_mex(cov);
+    %come back to ensuring covariance matrix is positive definite
+    %cov matrix should always be positive definite given sufficient trial
+    %number : data point ratio
+
+    pred = basis_resp(:,:,set)*W';
+
+    for j = 1:Ntesttrials
+        samp = test_samples(:,j);
+        res = bsxfun(@minus, samp', pred);
+
+        %log-likelihood formula: ll(s) is -0.5 times a weighted sum of
+        %squares of residuals for our predicted result at s, where weights are determined by inverting
+        %variance (precision matrix) for each voxel
+        %leave out precision matrix for now
+
+        ll = -0.5*diag(res*prec_mat*res');
+
+        probs = exp(ll-max(ll));
+        probs = probs/sum(probs);
+
+        liks(j,:) = liks(j,:) + probs';
+    end
+
 
 end
+
+posteriors = bsxfun(@rdivide, liks, sum(liks,2));
+uncertainty = var(posteriors,[],2);
+[prob,idx] = max(posteriors,[],2);
+outp = binvals(idx);
+avgacc = mean(abs(outp-stimval(test_trials))/(2*pi));
 
