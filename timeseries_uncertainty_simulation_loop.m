@@ -15,7 +15,7 @@ p.chan_exp = 3;
 %number of bins to discretize possible stimulus values
 p.nbinsstimval = 100;
 %size of time bins
-p.msperbin = 5;
+p.msperbin = 1;
 %number of times to repeat simulation
 p.niters = 50;
 
@@ -112,16 +112,16 @@ currentfolder = mkdir(foldername);
 parentpath = cd(sprintf(foldername));
 
 %% TAFKAP ideal time series data
-sim.p.Ntrials = 600; 
-sim.p.trialsPerCV = 100;
-sim.p.Nelectrodes = 15;
+sim.p.Ntrials = 1000; 
+sim.p.trialsPerCV = 250;
+sim.p.Nelectrodes = 30;
 sim.p.timewindow = 1:101;
 sim.p.tzero = 20;
-sim.p.tuning_corr_noise = 10;
-sim.p.ind_noise = 4;
-sim.p.global_noise = 10;
+sim.p.tuning_corr_noise = 4;
+sim.p.ind_noise = 0.5;
+sim.p.global_noise = 6;
 sim.p.decay = 0.8;
-sim.p.signalstrength = 5;
+sim.p.signalstrength = 0.2;
 
 Ntrials = sim.p.Ntrials;
 trialsPerCV = sim.p.trialsPerCV;
@@ -141,6 +141,9 @@ signalstrength = sim.p.signalstrength;
 stimval = rand(Ntrials,1) * 2*pi;
 basis_prefs = (0:2*pi/(p.nchan):2*pi);
 basis_prefs(end) = [];
+%%
+
+% 
 
 
 pref = rand(1,Nelectrodes) * 2 *pi;
@@ -162,7 +165,7 @@ for n = 1:Ntrials
         for e = 1:Nelectrodes
             allsamples(t,e,n) = signalstrength*(pi - abs(circ_dist(pref(e),stimval(n)))^2) + dot(pref_similarity(e,:),tunenoise) + randn(1)*ind_noise;
         end
-        allsamples(t,:,n) = allsamples(t,:,n) + global_noise*randn(1,Nelectrodes) + decay*allsamples(t-1,:,n);
+        allsamples(t,:,n) = allsamples(t,:,n) + repmat(global_noise*randn(1),1,Nelectrodes) + decay*allsamples(t-1,:,n);
     end
 end
 allsamples(1,:,:) = [];
@@ -244,6 +247,7 @@ end
 sim.postmat = zeros(Ntesttrials, p.nbinsstimval, NtimePoints);
 sim.uncmat = zeros(NtimePoints,1);
 sim.errmat = zeros(NtimePoints,1);
+sim.corrmat = zeros(NtimePoints,1);
 
 %START TIME POINT LOOP
 for m = 1:NtimePoints
@@ -459,6 +463,7 @@ end
 errors = abs(circ_dist(outp, stimval(test_trials)));
 avgerrort = mean(errors)/(2*pi);
 avgunct = mean(uncertainty);
+sim.corrmat(m) = corr(uncertainty, errors);
 sim.errmat(m) = avgerrort;
 sim.uncmat(m) = avgunct;
 fprintf('\n t=%s, error=%3.2f, uncertainty=%3.2f', timestr(m), avgerrort, avgunct);
@@ -531,7 +536,7 @@ avgpooledunc = mean(pooleduncertainty);
 % legend([pre(1), post(1)], 'before stimulus onset', 'after stimulus onset');
 
 save('results', '-struct', 'sim');
-cd (parentfolder);
+cd (homefolder); cd (parentfolder);
 
 clear sim
 

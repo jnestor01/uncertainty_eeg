@@ -1,15 +1,30 @@
 %ignoring random seeding for now
+warning('on', 'Matlab:rankDeficientMatrix')
 
+run = 1;
 % clear
+% meg = load('R1507_CupcakeAperture_4.25.19_ebci_condData.mat');
+% trials = load('R1507_20190425_run01_CupcakeAperture_20190425.mat');
+timewindow = [1051:1151];
+samples = meg.D.condData(:,:,:,run);
+targetelectrodes = [10:15];
+samples = samples(timewindow,targetelectrodes,:);
+samples(:,:,any(any(isnan(samples),2),1)) = [];
+Ntrials = size(samples,3);
+Nelectrodes = size(samples,2);
+
+stimval = zeros(Ntrials,1);
+for i=1:Ntrials
+    stimval(i) = trials.expt.trialsPresented(i).orientation;
+end
+stimval = stimval/180 * 2 * pi;
 
 %portion of data to hold out as testing data
 p.test_part = 0.2;
 %maximum number of bootstrap iterations
 p.nboot = 1e3;
 %number of basis functions to use for defining tuning curves
-%this parameter must be less than the number of unique stimulus values
-%presented across trials
-p.nchan = 8;
+p.nchan = 7;
 %number of sets of basis functions to choose from during bootstrapping
 p.nsets = 4;
 %exponent to which basis functions are raised
@@ -17,7 +32,6 @@ p.chan_exp = 5;
 %number of bins to discretize possible stimulus values
 p.nbinsstimval = 100;
 
-binseq = [0:15];
 %EEG specific (assuming 1000Hz data)
 
 p.msperbin = 10;
@@ -38,21 +52,21 @@ lambda_var_range = linspace(0,1,50);
 
 
 %Dummy data
-samples =[];
-Ntrials = 600;
-Nelectrodes = 4;
-stimval = rand(Ntrials,1) * 2*pi;
-trialLength = 100;
-signalstrength = 10;
-noisestrength = 0.1;
-for l = 1:Nelectrodes
-    pref = rand(1)*2*pi;
-    for k = 1:trialLength
-        samples(k,l,:) = abs(stimval-pref)*signalstrength + randn(Ntrials,1)*noisestrength;
-    end
-end
-trialsPerCV = 100;
-cvid = repmat([1:Ntrials/trialsPerCV]',trialsPerCV,1);
+% samples =[];
+% Ntrials = 600;
+% Nelectrodes = 4;
+% stimval = rand(Ntrials,1) * 2*pi;
+% trialLength = 100;
+% signalstrength = 10;
+% noisestrength = 0.1;
+% for l = 1:Nelectrodes
+%     pref = rand(1)*2*pi;
+%     for k = 1:trialLength
+%         samples(k,l,:) = abs(stimval-pref)*signalstrength + randn(Ntrials,1)*noisestrength;
+%     end
+% end
+% trialsPerCV = 100;
+% cvid = repmat([1:Ntrials/trialsPerCV]',trialsPerCV,1);
 
 
 %cut off data at end if trial length is not divisible by binsize
@@ -104,7 +118,6 @@ end
 
 %plot(binvals, basis_resp(:,:,2))
 
-%for each trial how do we expect each basis population to respond
 resp = nan(Ntrials, p.nchan,p.nsets);
 for i = 1:p.nsets
     for j = 1:p.nchan
@@ -115,101 +128,65 @@ end
 train_resp = resp(train_trials,:,:);
 test_resp = resp(test_trials,:,:);
 
+%find_lambda placeholder
+lambda = 0.5;
+lambda_var = 0.5;
+
 %cross-validation over cvid trials to optimize lambda and lambda_var
-cvid(test_trials) = 0;
-
-cv_folds = unique(cvid(cvid ~= 0));
-k = length(cv_folds);
-
-cv_W{k} = [];
-c_noise{k} = [];
-t_noise{k} = [];
-valsamplecov{k} = [];
-
-for j = 1:k
-
-    set = 1;
-    idj = cvid==cv_folds(j);
-    idjc = ~idj;
-    idjc(test_trials) = 0;
-    c_resp = resp(idjc, :, set);
-    c_samples = samples(:,idjc);    
-    t_resp = resp(idj, :, set);
-    t_samples = samples(:,idj);
-    cv_W{j} = (c_resp\c_samples')';
-    c_noise{j} = c_samples - (c_resp*cv_W{j}')';
-    t_noise{j} = t_samples - (t_resp*cv_W{j}')';
-    valsamplecov{k} = (t_noise{k}*t_noise{k}')/size(t_noise{k},1);
-
-end
-
-ranges{1} = lambda_range;
-ranges{2} = lambda_var_range;
-
-s = cellfun(@length, ranges);
-Ngrid = min(max(2, ceil(sqrt(s))), s); %Number of values to visit in each dimension (has to be at least 2, except if there is only 1 value for that dimension)
-
-grid_vec = cellfun(@(x,y) linspace(1, y, x), num2cell(Ngrid), num2cell(s), 'UniformOutput', 0);
-[grid_x, grid_y] = meshgrid(grid_vec{1}, grid_vec{2});
-[grid_l1, grid_l2] = meshgrid(ranges{1}, ranges{2});
-sz = fliplr(cellfun(@numel, ranges));
-
-losses = nan(numel(grid_x),1);
-
-for grid_iter=1:numel(grid_x)
-    this_lambda = [lambda_range(grid_x(grid_iter)) lambda_var_range(grid_y(grid_iter))];
-    loss = 0;
-    for cv_iter2=1:k
-        valC = valsamplecov{k}; %sample covariance of validation data
-        estC = estimate_cov(c_noise{cv_iter2}, this_lambda(1), this_lambda(2), cv_W{cv_iter2}, valC);
-        loss = loss + cov_loss(estC, valC);
-    end
-    losses(grid_iter) = loss;
+% cvid(test_trials) = 0;
+% 
+% cv_folds = unique(cvid(cvid ~= 0));
+% k = length(cv_folds);
+% 
+% cv_W{k} = [];
+% c_noise{k} = [];
+% t_noise{k} = [];
+% 
+% for j = 1:k
+% 
+%     set = 1;
+%     idj = cvid==cv_folds(j);
+%     idjc = ~idj;
+%     idjc(test_trials) = 0;
+%     c_resp = resp(idjc, :, set);
+%     c_samples = samples(:,idjc);    
+%     t_resp = resp(idj, :, set);
+%     t_samples = samples(:,idj);
+%     cv_W{j} = (c_resp\c_samples')';
+%     c_noise{j} = c_samples - (c_resp*W')';
+%     t_noise{j} = t_samples - (t_resp*W')';    
+% 
+% end
+% 
+% ranges{1} = lambda_range;
+% ranges{2} = lambda_var_range;
+% 
+% s = cellfun(@length, ranges);
+% Ngrid = min(max(2, ceil(sqrt(s))), s); %Number of values to visit in each dimension (has to be at least 2, except if there is only 1 value for that dimension)
+% 
+% grid_vec = cellfun(@(x,y) linspace(1, y, x), num2cell(Ngrid), num2cell(s), 'UniformOutput', 0);
+% [grid_x, grid_y] = meshgrid(grid_vec{1}, grid_vec{2});
+% [grid_l1, grid_l2] = meshgrid(ranges{1}, ranges{2});
+% sz = fliplr(cellfun(@numel, ranges));
+% 
+% losses = nan(numel(grid_x),1);
+% 
+% for grid_iter=1:numel(grid_x)
+%     this_lambda = [lambda_range{1}(grid_x(grid_iter)) lambda_range{2}(grid_y(grid_iter))];
+%     loss = 0;
+%     for cv_iter2=1:K
+% %         estC = estimate_cov(est_noise_cv{cv_iter2}, lambda(1), lambda(2), W_cv{cv_iter2});
+%         valC = (val_noise_cv{cv_iter2}'*val_noise_cv{cv_iter2})/size(val_noise_cv{cv_iter2},1); %sample covariance of validation data
+%         WWt = W_cv{cv_iter2}*W_cv{cv_iter2}';
+% 
+%         loss = loss + cov_loss(estC, valC);
+%     end
+%     losses(grid_iter) = cov_loss(this_lambda);
 %     fprintf('\n %02d/%02d -- lambda_var: %3.2f, lambda: %3.2f, loss: %5.4g', [grid_iter, numel(grid_x), this_lambda, losses(grid_iter)]);
-end
+% end
 
-[best_loss, best_idx] = min(losses);
-visited = sub2ind(sz,grid_y,grid_x); visited = visited(:);
-best_idx = visited(best_idx);
 
-% fprintf('\n--PATTERN SEARCH--');        
-step_size = 2^floor(log2(diff(grid_y(1:2)/2))); 
 
-while 1
-    [best_y,best_x] = ind2sub(sz, best_idx);
-    new_x = best_x + [-1 1 -1 1]'*step_size;
-    new_y = best_y + [-1 -1 1 1]'*step_size;
-    del_idx = new_x<=0 | new_x> numel(ranges{1}) | new_y<=0 | new_y > numel(ranges{2});
-    new_x(del_idx) = []; new_y(del_idx) = [];
-    new_idx = sub2ind(sz, new_y, new_x);
-    new_idx = new_idx(~ismember(new_idx, visited));
-
-    if ~isempty(new_idx)
-        this_losses = nan(size(new_idx));
-        for ii = 1:length(new_idx)
-            this_lambda = [grid_l1(new_idx(ii)), grid_l2(new_idx(ii))];
-            loss = 0;
-            for cv_iter2=1:k
-                valC = valsamplecov{k}; %sample covariance of validation data
-                estC = estimate_cov(c_noise{cv_iter2}, this_lambda(1), this_lambda(2), cv_W{cv_iter2}, valC);
-                loss = loss + cov_loss(estC, valC);
-            end
-            this_losses(ii) = loss;
-%             fprintf('\nStep size: %d, lambda_var: %3.2f, lambda: %3.2f, loss: %5.4g', [step_size, this_lambda, this_losses(ii)]);
-        end
-        visited = vertcat(visited, new_idx);
-        losses = vertcat(losses, this_losses);
-    end
-    if any(this_losses<best_loss)
-        [best_loss, best_idx] = min(losses);
-        best_idx = visited(best_idx);
-    elseif step_size>1
-        step_size = step_size/2;
-    else
-        break
-    end
-end
-lambda = grid_l1(best_idx); lambda_var = grid_l2(best_idx);
 
 liks = zeros(Ntesttrials, p.nbinsstimval);
 
@@ -225,10 +202,11 @@ for b=1:p.nboot
     noise = train_samples(:,idx) - (train_resp(idx,:,set)*W')';
 
     %calculate sigma
+    noise = noise./max(noise,[],'all');
     samplecov = noise*noise'/Ntraintrials;
 
     cov = estimate_cov(noise, lambda, lambda_var, W, samplecov);
-%     cov = samplecov;
+    cov = samplecov;
 
     % [~, flag] = chol(cov);
     % if flag>0
@@ -242,7 +220,7 @@ for b=1:p.nboot
 
     prec_mat = invChol_mex(cov);
     %come back to ensuring covariance matrix is positive definite
-    %cov matrix should (essentialy) always be positive definite given sufficient trial
+    %cov matrix should always be positive definite given sufficient trial
     %number : data point ratio
 
     pred = basis_resp(:,:,set)*W';
@@ -284,13 +262,13 @@ function c = estimate_cov(noise, lambda_var, lambda, W, samplecov)
 
     WWt = W*W';
     sigmasq = mean(noise'.^2);
+    t = tril(ones(size(noise,1)),-1)==1;
+
 
     % vars = mean
     %OLS: how well can we predict covariance terms with some constant (coeff(2)) and
     %some coefficient associated with tuning-correlated noise
     %(coeff(1))?
-    t = tril(ones(size(noise,1)),-1)==1;
-
     coeff = [WWt(t), ones(sum(t(:)),1)]\samplecov(t);
 
     targetcov = coeff(1)*WWt + coeff(2)*ones(size(W,1));
@@ -303,8 +281,8 @@ function c = estimate_cov(noise, lambda_var, lambda, W, samplecov)
 end
 
 function loss = cov_loss(est_cov, samp_cov)
-        try
-            loss = (logdet(est_cov, 'chol') + sum(sum(invChol_mex(est_cov).*samp_cov)))/size(samp_cov,2);
+    try
+        loss = (logdet(est_cov, 'chol') + sum(sum(invChol_mex(est_cov).*samp_cov)))/size(samp_cov,2);
         catch ME
             if any(strcmpi(ME.identifier, {'MATLAB:posdef', 'MATLAB:invChol_mex:dpotrf:notposdef'}))
                 loss = (logdet(est_cov) + trace(est_cov\samp_cov))/size(samp_cov,2);
@@ -312,5 +290,4 @@ function loss = cov_loss(est_cov, samp_cov)
                 rethrow(ME);
             end
         end
-        if imag(loss)~=0, loss = inf; end
 end
