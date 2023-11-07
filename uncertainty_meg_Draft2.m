@@ -7,7 +7,7 @@ p.nboot = 1e3;
 %number of basis functions to use for defining tuning curves
 %this parameter must be less than the number of unique stimulus values
 %presented across trials
-p.nchan = 8;
+p.nchan = 6;
 %number of sets of basis functions to choose from during bootstrapping
 p.nsets = 4;
 %exponent to which basis functions are raised
@@ -20,12 +20,12 @@ p.msperbin = 1;
 % clear
 runs = [1:8];
 % meg = load('R1507_CupcakeAperture_4.25.19_ebci_condData.mat');
-timewindow = [1001:1501];
-targetchannels = [1:20];
+timewindow = [1101:1501];
+targetchannels = [1:157];
 trialsPerRun = size(meg.D.condData,3);
 
 lambda_range = linspace(0,1,50);
-lambda_var_range = linspace(0,1,50);
+lambda_var_range = linspace(0,1,4);
 %stim onset, not used in decoding just for making strings
 t0 = 0;
 
@@ -96,50 +96,50 @@ stimval = stimval/180 * 2 * pi;
 % Nelectrodes = size(samples,2);
 %%
 
-%% TAFKAP ideal time series data
-Ntrials = 600; 
-trialsPerCV = 100;
-Nelectrodes = 15;
-timewindow = 1:101;
-allsamples = zeros(size(timewindow,2)+1,Nelectrodes,Ntrials);
-t0 = 20;
-
-tuning_corr_noise = 15;
-ind_noise = 4;
-global_noise = 10;
-decay = 0.75;
-
-signalstrength = 5;
-
-stimval = rand(Ntrials,1) * 2*pi;
-basis_prefs = (0:2*pi/(p.nchan):2*pi);
-basis_prefs(end) = [];
-pref = rand(1,Nelectrodes) * 2 *pi;
-
-pref_similarity = zeros(Nelectrodes, p.nchan);
-for n = 1:Nelectrodes
-    pref_similarity(n,:) = pi - abs(circ_dist(pref(n), basis_prefs));
-end
-
-for n = 1:Ntrials
-    for t = 2:t0
-        tunenoise = randn(p.nchan,1)*tuning_corr_noise;
-        for e = 1:Nelectrodes
-            allsamples(t,e,n) = dot(pref_similarity(e,:),tunenoise) + randn(1)*ind_noise;
-        end
-        allsamples(t,:,n) = allsamples(t,:,n) + global_noise*randn(1,Nelectrodes) + decay*allsamples(t-1,:,n);
-    end
-    for t = t0+1:size(timewindow,2)+1
-        tunenoise = randn(p.nchan,1)*tuning_corr_noise;
-        for e = 1:Nelectrodes
-            allsamples(t,e,n) = signalstrength*(pi - abs(circ_dist(pref(e),stimval(n)))^2) + dot(pref_similarity(e,:),tunenoise) + randn(1)*ind_noise;
-        end
-        allsamples(t,:,n) = allsamples(t,:,n) + global_noise*randn(1,Nelectrodes) + decay*allsamples(t-1,:,n);
-    end
-end
-allsamples(1,:,:) = [];
-cvid = repmat([1:Ntrials/trialsPerCV]',trialsPerCV,1);
-%%
+% %% TAFKAP ideal time series data
+% Ntrials = 600; 
+% trialsPerCV = 100;
+% Nelectrodes = 15;
+% timewindow = 1:101;
+% allsamples = zeros(size(timewindow,2)+1,Nelectrodes,Ntrials);
+% t0 = 20;
+% 
+% tuning_corr_noise = 15;
+% ind_noise = 4;
+% global_noise = 10;
+% decay = 0.75;
+% 
+% signalstrength = 5;
+% 
+% stimval = rand(Ntrials,1) * 2*pi;
+% basis_prefs = (0:2*pi/(p.nchan):2*pi);
+% basis_prefs(end) = [];
+% pref = rand(1,Nelectrodes) * 2 *pi;
+% 
+% pref_similarity = zeros(Nelectrodes, p.nchan);
+% for n = 1:Nelectrodes
+%     pref_similarity(n,:) = pi - abs(circ_dist(pref(n), basis_prefs));
+% end
+% 
+% for n = 1:Ntrials
+%     for t = 2:t0
+%         tunenoise = randn(p.nchan,1)*tuning_corr_noise;
+%         for e = 1:Nelectrodes
+%             allsamples(t,e,n) = dot(pref_similarity(e,:),tunenoise) + randn(1)*ind_noise;
+%         end
+%         allsamples(t,:,n) = allsamples(t,:,n) + global_noise*randn(1,Nelectrodes) + decay*allsamples(t-1,:,n);
+%     end
+%     for t = t0+1:size(timewindow,2)+1
+%         tunenoise = randn(p.nchan,1)*tuning_corr_noise;
+%         for e = 1:Nelectrodes
+%             allsamples(t,e,n) = signalstrength*(pi - abs(circ_dist(pref(e),stimval(n)))^2) + dot(pref_similarity(e,:),tunenoise) + randn(1)*ind_noise;
+%         end
+%         allsamples(t,:,n) = allsamples(t,:,n) + global_noise*randn(1,Nelectrodes) + decay*allsamples(t-1,:,n);
+%     end
+% end
+% allsamples(1,:,:) = [];
+% cvid = repmat([1:Ntrials/trialsPerCV]',trialsPerCV,1);
+% %%
 
 
 % cut off data at end if trial length is not divisible by binsize
@@ -224,6 +224,7 @@ errmat = zeros(NtimePoints,1);
 
 %START TIME POINT LOOP
 for m = 1:NtimePoints
+
     samples = allsamples(m,:,:);
     samples = reshape(samples, Nelectrodes, Ntrials);
 
@@ -286,7 +287,7 @@ for grid_iter=1:numel(grid_x)
     infs = 0;
     for cv_iter2=1:k
         valC = valsamplecov{cv_iter2}; %sample covariance of validation data
-        estC = estimate_cov(c_noise{cv_iter2}, this_lambda(1), this_lambda(2), cv_W{cv_iter2}, c_samplecov{cv_iter2});
+        estC = estimate_cov_blankertz(c_noise{cv_iter2}, this_lambda(2), c_samplecov{cv_iter2});
         lossk = cov_loss(estC, valC);
         if grid_iter==10
         x{cv_iter2,1}=valC;
@@ -331,7 +332,7 @@ while 1
             infs = 0;
             for cv_iter2=1:k
                 valC = valsamplecov{cv_iter2}; %sample covariance of validation data
-                estC = estimate_cov(c_noise{cv_iter2}, this_lambda(1), this_lambda(2), cv_W{cv_iter2}, c_samplecov{cv_iter2});
+                estC = estimate_cov_blankertz(c_noise{cv_iter2}, this_lambda(2), c_samplecov{cv_iter2});
                 lossk = cov_loss(estC, valC);
                 if isinf(lossk)
                     infs = infs+1;
@@ -377,7 +378,7 @@ for b=1:p.nboot
     %calculate sigma
     samplecov = noise*noise'/Ntraintrials;
 
-    cov = estimate_cov(noise, lambda, lambda_var, W, samplecov);
+    cov = estimate_cov_blankertz(noise, lambda, samplecov);
 %     cov = samplecov;
 
     % [~, flag] = chol(cov);
@@ -557,4 +558,12 @@ function loss = cov_loss(est_cov, samp_cov)
             end
         end
         if imag(loss)~=0, loss = inf; end
+end
+
+function c = estimate_cov_blankertz(noise, lambda, samplecov)
+    
+    n = size(samplecov,1);
+    upsilon = trace(samplecov)/n;
+    c = (1-lambda)*samplecov + lambda*upsilon*eye(n);
+    
 end
