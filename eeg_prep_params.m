@@ -14,6 +14,6 @@ p.eyeparams.gazewindow = p.eyeparams.blinkwindow;
 p.fileloc = '/projectnb/rdenlab/Users/Data/Cupcake_EEG';
 p.subjfolder = '/S0108';
 p.filename = '/cupcake_jeff_0916';
-
-
+p.hz = 1000;
+p.reference = 'avg';
 end

@@ -5,7 +5,7 @@ p = eeg_prep_params();
 if argin>0
     inp_fields = fieldnames(p_special);
     for i =1:numel(inp_fields)
-        
+        p.(inp_fields{i}) = p_special.(inp_fields{i});
     end
     p.subjfolder = p_special.subjfolder;
     p.filename = p_special.filename;
@@ -18,18 +18,19 @@ filters = p.filters;
 suffix = p.suffix;
 rm_baseline_window = p.rm_baseline_window;
 eeg_chans = p.eeg_chans;
-diode_thresh = 1*10^4;
-epoch_after_delay_correction = [-1000 1500];
+diode_thresh = p.diode_thresh;
+epoch_after_delay_correction = p.epoch_after_delay_correction;
 
 p.eyeparams.do = 1;
 p.eyeparams.center = [960, 540];
 p.eyeparams.blinkwindow = [0 500]-epoch_after_delay_correction(1);
 p.eyeparams.saccwindow = [0 0];
 p.eyeparams.gazewindow = p.eyeparams.blinkwindow;
-fileloc = '/Users/jeffreynestor/Desktop/Uncertainty/EEG_data/Pilot_6_report';
-filename = 'cupcake0006';
+fileloc = p.fileloc;
+subjfolder = p.subjfolder;
+filename = p.filename;
 
-hz = 1000;
+hz = p.hz;
 
 % fileloc = '/Users/jeffreynestor/Desktop/Uncertainty/EEG_data/Pilot_1/';
 % filename = 'cupcake0001';
@@ -40,6 +41,8 @@ hz = 1000;
 % fileloc = '/Users/jeffreynestor/Desktop/Uncertainty/EEG_data/Pilot_2/cupcake0002_large';
 % filename = 'cupcake0002_large';
 addpath(fileloc);
+cd(fileloc);
+cd(subjfolder);
 
 [ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;
 
@@ -51,6 +54,7 @@ EEG = pop_basicfilter(EEG,1:63,'Cutoff',filters,'Design','butter','Filter','band
 [ALLEEG, EEG, CURRENTSET] = pop_newset(ALLEEG, EEG, 0, 'setname', 'filtered', 'gui', 'off');
 
 % rereference
+if strcmp(p.reference, 'avg')
 EEG = pop_eegchanoperator(EEG, { ...
     'ch1=ch1-.5*ch20 label Fp1' ...
     'ch2=ch2-.5*ch20 label Fz' ...
@@ -117,6 +121,7 @@ EEG = pop_eegchanoperator(EEG, { ...
     'ch63=ch63-.5*ch20 label Iz' ...
     });
 [ALLEEG, EEG, CURRENTSET] = pop_newset(ALLEEG, EEG, 0, 'setname', 'reref', 'gui', 'off');
+end
 
 % 
 % EEG = pop_runica(EEG,'extended',1,'chanind',eeg_chans);
