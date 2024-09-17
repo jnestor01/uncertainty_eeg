@@ -1,10 +1,23 @@
+function eeg_prep_cupcake(p_special)
+
+p = eeg_prep_params();
+
+if argin>0
+    inp_fields = fieldnames(p_special);
+    for i =1:numel(inp_fields)
+        
+    end
+    p.subjfolder = p_special.subjfolder;
+    p.filename = p_special.filename;
+end
+
 % EEGLAB history file generated on the 29-Feb-2024
 % ------------------------------------------------
 % not set up to downsample, add if desired
-filters = [0.01,0];
-suffix = 'aref_hfilt.mat';
-rm_baseline_window = [-500:0];
-eeg_chans = [1:19 21:63];
+filters = p.filters;
+suffix = p.suffix;
+rm_baseline_window = p.rm_baseline_window;
+eeg_chans = p.eeg_chans;
 diode_thresh = 1*10^4;
 epoch_after_delay_correction = [-1000 1500];
 
@@ -317,4 +330,6 @@ for i=targetchannels
     nexttile
 plot(mean(plotdata(i,:,:),3))
 end
+end
+
 end
