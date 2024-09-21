@@ -2,7 +2,7 @@ function eeg_prep_cupcake(p_special)
 
 p = eeg_prep_params();
 
-if argin>0
+if nargin>0
     inp_fields = fieldnames(p_special);
     for i =1:numel(inp_fields)
         p.(inp_fields{i}) = p_special.(inp_fields{i});
@@ -44,9 +44,9 @@ if ~exist(sprintf('%s_%s.mat', filename, suffix), 'file')
 
 
     EEG.etc.eeglabvers = '2023.1'; % this tracks which version of EEGLAB is being used, you may ignore it
-    EEG = pop_loadbv(fileloc, sprintf('%s.vhdr', filename));
+    EEG = pop_loadbv('', sprintf('%s.vhdr', filename));
 
-    EEG = pop_basicfilter(EEG,1:63,'Cutoff',filters,'Design','butter','Filter','bandpass','Order',2);
+    EEG = pop_basicfilter(EEG,1:eeg_chans,'Cutoff',filters,'Design','butter','Filter','bandpass','Order',2);
     [ALLEEG, EEG, CURRENTSET] = pop_newset(ALLEEG, EEG, 0, 'setname', 'filtered', 'gui', 'off');
 
     % rereference
@@ -142,7 +142,7 @@ if ~exist(sprintf('%s_%s.mat', filename, suffix), 'file')
     last_sample = zero+b;
 
     outp.data = zeros(size(dtrn_eeg,1), b-a+1, size(dtrn_eeg,3));
-    delaystest = (EEG.data(64,[zero:end],:)-min(EEG.data(64,[zero:end],:), [], 2))>diode_thresh;
+    delaystest = (EEG.data(end,[zero:end],:)-min(EEG.data(end,[zero:end],:), [], 2))>diode_thresh;
     for i=1:size(delaystest,3)
         delay = find(delaystest(:,:,i),1,'first');
         outp.data(:,:,i) = dtrn_eeg(:, first_sample+delay:last_sample+delay, i);
@@ -196,7 +196,7 @@ if ~exist(sprintf('%s_%s.mat', filename, suffix), 'file')
     exclude_trials = find(trialmaxes>trialthresh);
 
     if p.eyeparams.do
-        eyefile = sprintf('%s_eyefile.edf', filename);
+        eyefile = sprintf('%s.edf', filename);
         eyedata = Edf2Mat(eyefile);
         eye_rejects = eyereject(eyedata, p.eyeparams);
         exclude_trials = [exclude_trials', eye_rejects];
@@ -218,18 +218,20 @@ end
 
 
 %% Plots
-plotdir = sprintf('plots_%s_%s', filename, suffix);
+trials = load(sprintf('%s.mat', filename));
+
+plotdir = sprintf('plots_%s_%s', filename, p.dirsuffix);
 if ~isfolder(plotdir)
     mkdir(plotdir);
 end
+cd(plotdir);
 
 figrect_topo = [0, 0, p.plots.dims_topo(1), p.plots.dims_topo(2)];
 figrect_timeseries = [0, 0, p.plots.dims_timeseries(1), p.plots.dims_timeseries(2)];
 
 t0 = -epoch_after_delay_correction(1);
-trials = load(sprintf('%s.mat', filename));
 stimval = trials.expt.trialsPresented.thetaDeg;
-cue = trials.expt.trialsPresented.att;
+cue = logical(trials.expt.trialsPresented.att);
 stimval(outp.excludetrials) = [];
 cue(outp.excludetrials) = [];
 % fixes(outp.excludetrials) = [];
@@ -325,7 +327,7 @@ end
 epoch_idx = (p.plots.epoch(1):p.plots.epoch(2))+t0;
 plot_time = outp.time(epoch_idx);
 
-timeseries_ticks = find(mod(plot_time,p.plot.tickinterval)==0);
+timeseries_ticks = find(mod(plot_time,p.plots.tickinterval)==0);
 timeseries_ticklabels = plot_time(timeseries_ticks);
 
 if p.plots.channelavg
@@ -387,7 +389,7 @@ if ~isempty(p.plots.somechannels)
     channelfigs = {};
     for i = 1:numel(p.plots.somechannels)
         for j = 1:numel(outp.chanlocs)
-            if strcmp(outp.chanlocs(j).name, p.plots.somechannels{i})
+            if strcmp(outp.chanlocs(j).labels, p.plots.somechannels{i})
                 channelids{i} = j;
             end
         end
@@ -409,7 +411,7 @@ if ~isempty(p.plots.somechannels)
     if p.plots.epoch<0
         xline(-p.plots.epoch, '--', 't0');
     end
-    title(sprintf('mean stimulus ERP averaged at %s', p.plots.somechannels{i});
+    title(sprintf('mean stimulus ERP averaged at %s', p.plots.somechannels{i}));
     legend({'cued stimuli', 'uncued stimuli'});
     saveas(channelfigs{end}, sprintf('%s_timeseries_cueduncued', p.plots.somechannels{i}), ext);      
 
@@ -426,7 +428,7 @@ if ~isempty(p.plots.somechannels)
     if p.plots.epoch<0
         xline(-p.plots.epoch, '--', 't0');
     end
-    title(sprintf('mean stimulus ERP averaged at %s', p.plots.somechannels{i});
+    title(sprintf('mean stimulus ERP averaged at %s', p.plots.somechannels{i}));
     legend({'left hemifield stimuli', 'right hemifield stimuli'});
     saveas(channelfigs{end}, sprintf('%s_timeseries_lr', p.plots.somechannels{i}), ext);      
 
